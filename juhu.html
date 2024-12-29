@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frequency Test</title>
+    <!-- Include Plotly.js library -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+</head>
+<body>
+    <h1>Hearing Hz threshold test</h1>
+    <button id="startButton">Start Test</button>
+    <button id="stopButton" disabled>Stop Test</button>
+    <p>Click the button to start a tone that rises from 3000 Hz to 18000 Hz over 15 seconds.</p>
+    <p>Current Frequency: <span id="frequencyDisplay">0 Hz</span></p>
+
+    <h2>Frequency Distribution (Histogram)</h2>
+    <div id="plotlyGraph" style="height: 400px;"></div>
+
+    <script>
+        let oscillator, audioContext, frequencyInterval;
+        let allFrequencies = {}; // Object to count frequency selections for histogram
+
+        // Function to play a tone that rises from 3000 Hz to 18000 Hz over 15 seconds
+        function playTone(startFreq, endFreq, duration) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            oscillator.type = 'sine'; // Sine wave tone
+
+            // Set initial frequency and start oscillator
+            oscillator.frequency.setValueAtTime(startFreq, audioContext.currentTime);
+            oscillator.start();
+
+            // Gradually increase the frequency from startFreq to endFreq over the duration
+            oscillator.frequency.linearRampToValueAtTime(endFreq, audioContext.currentTime + duration);
+
+            gainNode.gain.setValueAtTime(1, audioContext.currentTime); // Volume
+
+            // Track frequency changes and update the display
+            let startTime = audioContext.currentTime;
+            frequencyInterval = setInterval(() => {
+                const elapsedTime = audioContext.currentTime - startTime;
+                const currentFrequency = startFreq + (endFreq - startFreq) * (elapsedTime / duration);
+                document.getElementById("frequencyDisplay").innerText = `${Math.round(currentFrequency)} Hz`;
+            }, 100); // Update every 100ms
+
+            // Stop after the duration
+            oscillator.stop(audioContext.currentTime + duration);
+        }
+
+        // Event listener for the start button to play the tone
+        document.getElementById("startButton").addEventListener("click", function() {
+            document.getElementById("startButton").disabled = true;
+            document.getElementById("stopButton").disabled = false;
+            document.getElementById("frequencyDisplay").innerText = "0 Hz"; // Reset frequency display
+            playTone(500, 8000, 60); // Start at 3000 Hz, rise to 18000 Hz in 15 seconds
+        });
+
+        // Event listener for the stop button to stop the tone and record the selected frequency
+        document.getElementById("stopButton").addEventListener("click", function() {
+            clearInterval(frequencyInterval); // Stop frequency updates
+
+            // Stop the oscillator immediately when stop button is pressed
+            if (oscillator) {
+                oscillator.stop();
+            }
+
+            // Get the current frequency
+            const currentFrequency = document.getElementById("frequencyDisplay").innerText;
+
+            // Round the frequency to the nearest 500 Hz
+            const roundedFrequency = Math.round(parseInt(currentFrequency) / 50) * 50;
+
+            // Add the rounded frequency to the count of selected frequencies (histogram)
+            if (!isNaN(roundedFrequency)) {
+                if (allFrequencies[roundedFrequency]) {
+                    allFrequencies[roundedFrequency] += 1;
+                } else {
+                    allFrequencies[roundedFrequency] = 1;
+                }
+            }
+
+            alert(`You stopped at: ${roundedFrequency} Hz`);
+
+            // Plot the frequency distribution (histogram)
+            plotFrequencyDistribution();
+
+            // Re-enable the start button for the next test
+            document.getElementById("startButton").disabled = false;
+            document.getElementById("stopButton").disabled = true;
+        });
+
+        // Function to plot the frequency distribution (histogram)
+        function plotFrequencyDistribution() {
+            // Prepare data for histogram
+            const frequencies = Object.keys(allFrequencies).map(Number); // Get all frequencies
+            const counts = frequencies.map(frequency => allFrequencies[frequency]); // Get corresponding counts
+
+            const trace = {
+                x: frequencies,  // Frequencies selected by users
+                y: counts,       // Counts of selections
+                type: 'bar',     // Bar chart
+                name: 'Frequency Count',
+                marker: { color: 'red' }
+            };
+
+            const layout = {
+                title: 'Frequency Distribution',
+                xaxis: { title: 'Frequency (Hz)' },
+                yaxis: { title: 'Count' },
+                bargap: 0.2
+            };
+
+            const data = [trace];
+
+            // Use Plotly to plot the histogram
+            Plotly.newPlot('plotlyGraph', data, layout, { overwrite: false });
+        }
+    </script>
+</body>
+</html>
